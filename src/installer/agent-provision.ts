@@ -1,0 +1,75 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { WorkflowAgent, WorkflowSpec } from "./types.js";
+import { resolveOpenClawStateDir } from "./paths.js";
+import { writeWorkflowFile } from "./workspace-files.js";
+
+export type ProvisionedAgent = {
+  id: string;
+  name?: string;
+  workspaceDir: string;
+  agentDir: string;
+};
+
+function resolveAgentWorkspaceRoot(): string {
+  return path.join(resolveOpenClawStateDir(), "workspaces", "workflows");
+}
+
+function resolveAgentDir(agentId: string): string {
+  const safeId = agentId.replace(/[^a-zA-Z0-9_-]/g, "__");
+  return path.join(resolveOpenClawStateDir(), "agents", safeId, "agent");
+}
+
+async function ensureDir(dir: string): Promise<void> {
+  await fs.mkdir(dir, { recursive: true });
+}
+
+function resolveWorkspaceDir(params: {
+  workflowId: string;
+  agent: WorkflowAgent;
+}): string {
+  const baseDir = params.agent.workspace.baseDir?.trim() || params.agent.id;
+  return path.join(resolveAgentWorkspaceRoot(), params.workflowId, baseDir);
+}
+
+export async function provisionAgents(params: {
+  workflow: WorkflowSpec;
+  workflowDir: string;
+  overwriteFiles?: boolean;
+}): Promise<ProvisionedAgent[]> {
+  const overwrite = params.overwriteFiles ?? false;
+  const workflowRoot = resolveAgentWorkspaceRoot();
+  await ensureDir(workflowRoot);
+
+  const results: ProvisionedAgent[] = [];
+  for (const agent of params.workflow.agents) {
+    const workspaceDir = resolveWorkspaceDir({
+      workflowId: params.workflow.id,
+      agent,
+    });
+    await ensureDir(workspaceDir);
+
+    for (const [fileName, relativePath] of Object.entries(agent.workspace.files)) {
+      const source = path.join(params.workflowDir, relativePath);
+      try {
+        await fs.access(source);
+      } catch {
+        throw new Error(`Missing bootstrap file for agent "${agent.id}": ${relativePath}`);
+      }
+      const destination = path.join(workspaceDir, fileName);
+      await writeWorkflowFile({ destination, source, overwrite });
+    }
+
+    const agentDir = resolveAgentDir(`${params.workflow.id}-${agent.id}`);
+    await ensureDir(agentDir);
+
+    results.push({
+      id: `${params.workflow.id}/${agent.id}`,
+      name: agent.name,
+      workspaceDir,
+      agentDir,
+    });
+  }
+
+  return results;
+}

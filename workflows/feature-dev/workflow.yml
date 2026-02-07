@@ -1,0 +1,131 @@
+id: feature-dev
+name: Feature Development Workflow
+version: 1
+agents:
+  - id: lead
+    name: Lead
+    description: Owns workflow visibility, status, and escalation.
+    workspace:
+      baseDir: agents/lead
+      files:
+        AGENTS.md: agents/lead/AGENTS.md
+        SOUL.md: agents/lead/SOUL.md
+        TOOLS.md: shared/TOOLS.md
+        IDENTITY.md: agents/lead/IDENTITY.md
+        USER.md: shared/USER.md
+        HEARTBEAT.md: shared/HEARTBEAT.md
+        BOOTSTRAP.md: shared/BOOTSTRAP.md
+        MEMORY.md: shared/MEMORY.md
+  - id: developer
+    name: Developer
+    description: Implements the task and commits code locally.
+    workspace:
+      baseDir: agents/developer
+      files:
+        AGENTS.md: agents/developer/AGENTS.md
+        SOUL.md: agents/developer/SOUL.md
+        TOOLS.md: shared/TOOLS.md
+        IDENTITY.md: agents/developer/IDENTITY.md
+        USER.md: shared/USER.md
+        HEARTBEAT.md: shared/HEARTBEAT.md
+        BOOTSTRAP.md: shared/BOOTSTRAP.md
+        MEMORY.md: shared/MEMORY.md
+  - id: verifier
+    name: Verifier
+    description: Validates acceptance criteria and requests fixes.
+    workspace:
+      baseDir: agents/verifier
+      files:
+        AGENTS.md: agents/verifier/AGENTS.md
+        SOUL.md: agents/verifier/SOUL.md
+        TOOLS.md: shared/TOOLS.md
+        IDENTITY.md: agents/verifier/IDENTITY.md
+        USER.md: shared/USER.md
+        HEARTBEAT.md: shared/HEARTBEAT.md
+        BOOTSTRAP.md: shared/BOOTSTRAP.md
+        MEMORY.md: shared/MEMORY.md
+  - id: reviewer
+    name: Reviewer
+    description: Creates and reviews a GitHub PR; requests changes.
+    workspace:
+      baseDir: agents/reviewer
+      files:
+        AGENTS.md: agents/reviewer/AGENTS.md
+        SOUL.md: agents/reviewer/SOUL.md
+        TOOLS.md: shared/TOOLS.md
+        IDENTITY.md: agents/reviewer/IDENTITY.md
+        USER.md: shared/USER.md
+        HEARTBEAT.md: shared/HEARTBEAT.md
+        BOOTSTRAP.md: shared/BOOTSTRAP.md
+        MEMORY.md: shared/MEMORY.md
+steps:
+  - id: plan
+    agent: lead
+    input: |
+      You are the lead. Convert the task into a concise plan with acceptance criteria.
+      Task: {{task}}
+      Reply with:
+      STATUS: done
+      PLAN:
+      - ...
+      ACCEPTANCE:
+      - ...
+    expects: "STATUS: done"
+  - id: preflight-pr
+    agent: reviewer
+    input: |
+      Confirm GitHub CLI access for creating PRs.
+      Run: gh auth status
+      Reply with:
+      STATUS: done
+      or
+      STATUS: blocked
+      MISSING:
+      - ...
+    expects: "STATUS: done"
+    on_fail:
+      escalate_to: lead
+  - id: implement
+    agent: developer
+    input: |
+      Implement the feature described below. Follow the acceptance criteria.
+      {{context.plan}}
+      {{context.acceptance}}
+      Reply with:
+      STATUS: done
+      SUMMARY: ...
+      TESTS: ...
+    expects: "STATUS: done"
+    max_retries: 3
+  - id: verify
+    agent: verifier
+    input: |
+      Verify the implementation against acceptance criteria.
+      {{context.plan}}
+      {{context.acceptance}}
+      Reply with:
+      STATUS: done (if it meets all criteria)
+      or
+      STATUS: retry
+      MISSING:
+      - ...
+    expects: "STATUS: done"
+    on_fail:
+      retry_step: implement
+      max_retries: 5
+      on_exhausted: escalate_to: lead
+  - id: review
+    agent: reviewer
+    input: |
+      Create a PR and review it. If changes are needed, request them.
+      Reply with:
+      STATUS: done (PR ready for owner)
+      or
+      STATUS: retry
+      CHANGES:
+      - ...
+    expects: "STATUS: done"
+    on_fail:
+      retry_step: implement
+      max_retries: 5
+      on_exhausted: escalate_to: lead
