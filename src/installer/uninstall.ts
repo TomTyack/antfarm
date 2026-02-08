@@ -141,13 +141,18 @@ export async function uninstallAllWorkflows(): Promise<void> {
     await fs.rm(workflowWorkspaceRoot, { recursive: true, force: true });
   }
 
-  // Clean up SQLite run records
-  try {
-    const db = getDb();
-    db.exec("DELETE FROM steps");
-    db.exec("DELETE FROM runs");
-  } catch {
-    // DB might not exist
+  // Remove the SQLite database file
+  const { getDbPath } = await import("../db.js");
+  const dbPath = getDbPath();
+  if (await pathExists(dbPath)) {
+    await fs.rm(dbPath, { force: true });
+  }
+  // WAL and SHM files
+  for (const suffix of ["-wal", "-shm"]) {
+    const p = dbPath + suffix;
+    if (await pathExists(p)) {
+      await fs.rm(p, { force: true });
+    }
   }
 
   for (const entry of removedAgents) {
