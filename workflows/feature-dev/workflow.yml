@@ -2,11 +2,12 @@
 # session with clean context. Memory persists via git history and progress files.
 id: feature-dev
 name: Feature Development Workflow
-version: 5
+version: 6
 description: |
   Story-based execution pipeline. Planner decomposes tasks into user stories.
   Setup prepares the environment and establishes baseline.
   Developer implements each story (with tests) in a fresh session. Verifier checks each story.
+  Quality Gate runs and refactors according to architectural patterns.
   Then integration/E2E testing, PR creation, and code review.
 
 agents:
@@ -53,6 +54,18 @@ agents:
         AGENTS.md: ../../agents/shared/verifier/AGENTS.md
         SOUL.md: ../../agents/shared/verifier/SOUL.md
         IDENTITY.md: ../../agents/shared/verifier/IDENTITY.md
+
+  - id: quality-gate
+    name: Quality Gate
+    role: refactoring
+    description: Runs code and refactors according to architectural patterns before testing.
+    workspace:
+      baseDir: agents/quality-gate
+      files:
+        AGENTS.md: agents/quality-gate/AGENTS.md
+        SOUL.md: agents/quality-gate/SOUL.md
+        IDENTITY.md: agents/quality-gate/IDENTITY.md
+        cc-nextjs-serverside.md: quality-gates/cc-nextjs-serverside.md
 
   - id: tester
     name: Tester
@@ -225,6 +238,54 @@ steps:
       ISSUES:
       - What's missing or incomplete
     expects: "STATUS: done"
+    on_fail:
+      retry_step: implement
+      max_retries: 2
+      on_exhausted:
+        escalate_to: human
+
+  - id: quality-gate
+    agent: quality-gate
+    input: |
+      Quality gate: Run the code and refactor according to architectural patterns.
+
+      TASK:
+      {{task}}
+
+      REPO: {{repo}}
+      BRANCH: {{branch}}
+      CHANGES: {{changes}}
+      BUILD_CMD: {{build_cmd}}
+
+      PROGRESS LOG:
+      {{progress}}
+
+      Your job:
+      1. Read cc-nextjs-serverside.md for Next.js architectural patterns
+      2. Run the code to verify it actually works
+      3. Review the implementation against architectural patterns:
+         - Server Components vs Client Components placement
+         - Data fetching patterns (server-side vs client-side)
+         - Component boundaries and serialization
+         - Use of established utilities (serverFetch, getServerUser)
+      4. Refactor any violations:
+         - Move 'use client' to leaf components
+         - Move data fetching to server components
+         - Fix serialization issues
+         - Ensure typecheck still passes after refactoring
+      5. Run build to confirm no regressions
+      6. Commit refactorings: refactor: architectural improvements
+
+      Reply with:
+      STATUS: done
+      REFACTORINGS: What patterns you fixed (or "none needed")
+      
+      Or if blocking issues found:
+      STATUS: retry
+      ISSUES:
+      - Architectural violations that need developer attention
+    expects: "STATUS: done"
+    max_retries: 2
     on_fail:
       retry_step: implement
       max_retries: 2
