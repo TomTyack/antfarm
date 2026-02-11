@@ -67,6 +67,7 @@ export async function setupAgentCrons(workflow: WorkflowSpec): Promise<void> {
       agentId,
       payload: { kind: "agentTurn", message: prompt },
       enabled: true,
+      delivery: { mode: "none" },
     });
 
     if (!result.ok) {

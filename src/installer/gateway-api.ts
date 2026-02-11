@@ -95,6 +95,7 @@ export async function createAgentCronJob(job: {
   agentId: string;
   payload: { kind: string; message: string };
   enabled: boolean;
+  delivery?: { mode: string; channel?: string; to?: string; bestEffort?: boolean };
 }): Promise<{ ok: boolean; error?: string; id?: string }> {
   // --- Try HTTP first ---
   const httpResult = await createAgentCronJobHTTP(job);
