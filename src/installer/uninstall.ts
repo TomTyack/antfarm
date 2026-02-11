@@ -184,6 +184,118 @@ function removeRunRecords(workflowId: string): void {
   }
 }
 
+/**
+ * Terminate active agent sessions for a workflow by deleting session files.
+ * Scans the filesystem for agent directories (workflow-id-agent-name pattern) rather than relying on
+ * config.agents.list, because the config may have been partially cleaned by a previous failed uninstall.
+ * Related GitHub issue: Zombie agents from force-uninstalled workflows (#45, #40)
+ */
+async function terminateAgentSessions(workflowId: string): Promise<void> {
+  const openclawHome = path.join(os.homedir(), ".openclaw");
+  const agentsRoot = path.join(openclawHome, "agents");
+
+  if (!(await pathExists(agentsRoot))) {
+    return; // No agents directory at all
+  }
+
+  const entries = await fs.readdir(agentsRoot, { withFileTypes: true });
+  const prefix = `${workflowId}-`;
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (!entry.name.startsWith(prefix)) continue;
+
+    const agentDir = path.join(agentsRoot, entry.name);
+    const sessionsDir = path.join(agentDir, "sessions");
+
+    if (await pathExists(sessionsDir)) {
+      try {
+        await fs.rm(sessionsDir, { recursive: true, force: true });
+        console.log(`✓ Terminated sessions for agent: ${entry.name}`);
+      } catch (err) {
+        console.warn(`⚠ Failed to terminate sessions for ${entry.name}:`, err);
+      }
+    }
+  }
+}
+
+/**
+ * Cancel all active runs for a workflow in the database.
+ * This is the critical defense against zombie agents — even if processes survive,
+ * claimStep() and completeStep() both check run status and reject work for failed runs.
+ */
+function cancelActiveRuns(workflowId: string): void {
+  try {
+    const db = getDb();
+    const runs = db.prepare(
+      "SELECT id FROM runs WHERE workflow_id = ? AND status = 'running'"
+    ).all(workflowId) as Array<{ id: string }>;
+
+    for (const run of runs) {
+      db.prepare(
+        "UPDATE steps SET status = 'failed', output = 'Workflow force-uninstalled', updated_at = datetime('now') WHERE run_id = ? AND status IN ('running', 'pending', 'waiting')"
+      ).run(run.id);
+      db.prepare(
+        "UPDATE stories SET status = 'failed', updated_at = datetime('now') WHERE run_id = ? AND status IN ('running', 'pending')"
+      ).run(run.id);
+      db.prepare(
+        "UPDATE runs SET status = 'failed', updated_at = datetime('now') WHERE id = ?"
+      ).run(run.id);
+      console.log(`✓ Cancelled active run: ${run.id}`);
+    }
+  } catch {
+    // DB might not exist yet
+  }
+}
+
+/**
+ * Best-effort kill of running agent processes for a workflow.
+ * Uses fuser to find processes with open file handles in agent session directories,
+ * then sends SIGTERM. Falls back gracefully if fuser is unavailable.
+ */
+async function killAgentProcesses(workflowId: string): Promise<void> {
+  const openclawHome = path.join(os.homedir(), ".openclaw");
+  const agentsRoot = path.join(openclawHome, "agents");
+
+  if (!(await pathExists(agentsRoot))) return;
+
+  const entries = await fs.readdir(agentsRoot, { withFileTypes: true });
+  const prefix = `${workflowId}-`;
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (!entry.name.startsWith(prefix)) continue;
+
+    const sessionsDir = path.join(agentsRoot, entry.name, "sessions");
+    if (!(await pathExists(sessionsDir))) continue;
+
+    // Find PIDs with open files in the sessions directory via fuser (no shell)
+    let pids: number[] = [];
+    try {
+      const stdout = execFileSync("fuser", [sessionsDir], {
+        encoding: "utf-8",
+        timeout: 5000,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      pids = stdout.trim().split(/\s+/).filter(Boolean).map((s) => parseInt(s, 10)).filter((n) => !isNaN(n));
+    } catch (err: any) {
+      // fuser returns exit code 1 when no processes found, but may still have stdout
+      if (err?.stdout) {
+        pids = String(err.stdout).trim().split(/\s+/).filter(Boolean).map((s) => parseInt(s, 10)).filter((n) => !isNaN(n));
+      }
+    }
+
+    for (const pid of pids) {
+      try {
+        process.kill(pid, "SIGTERM");
+        console.log(`✓ Sent SIGTERM to process ${pid} (agent: ${entry.name})`);
+      } catch {
+        // Process may have already exited
+      }
+    }
+  }
+}
+
 export async function uninstallWorkflow(params: {
   workflowId: string;
   removeGuidance?: boolean;
@@ -203,6 +315,7 @@ export async function uninstallWorkflow(params: {
   // Step 5: Remove agents from config
   const workflowDir = resolveWorkflowDir(params.workflowId);
   const workflowWorkspaceDir = resolveWorkflowWorkspaceDir(params.workflowId);
+  
   const { path: configPath, config } = await readOpenClawConfig();
   const list = Array.isArray(config.agents?.list) ? config.agents?.list : [];
   const nextList = filterAgentList(list, params.workflowId);

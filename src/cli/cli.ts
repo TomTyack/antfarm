@@ -437,7 +437,7 @@ async function main() {
       ).get(run.id) as { id: string } | undefined;
       if (failedStory) {
         db.prepare(
-          "UPDATE stories SET status = 'pending', updated_at = datetime('now') WHERE id = ?"
+          "UPDATE stories SET status = 'pending', retry_count = 0, updated_at = datetime('now') WHERE id = ?"
         ).run(failedStory.id);
       }
     }
