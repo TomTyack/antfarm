@@ -50,6 +50,34 @@ function getActiveRuns(workflowId?: string): Array<{ id: string; workflow_id: st
   }
 }
 
+/**
+ * Terminate active agent sessions for a workflow by deleting session files.
+ * This prevents zombie agents from continuing work after uninstall.
+ * Related GitHub issue: Zombie agents from force-uninstalled workflows
+ */
+async function terminateAgentSessions(workflowId: string, agentList: Array<Record<string, unknown>>): Promise<void> {
+  const prefix = `${workflowId}/`;
+  const agentsToTerminate = agentList.filter((entry) => {
+    const id = typeof entry.id === "string" ? entry.id : "";
+    return id.startsWith(prefix);
+  });
+
+  for (const agent of agentsToTerminate) {
+    const agentDir = typeof agent.agentDir === "string" ? agent.agentDir : "";
+    if (!agentDir) continue;
+
+    const sessionsDir = path.join(agentDir, "sessions");
+    if (await pathExists(sessionsDir)) {
+      try {
+        await fs.rm(sessionsDir, { recursive: true, force: true });
+        console.log(`✓ Terminated sessions for agent: ${agent.id}`);
+      } catch (err) {
+        console.warn(`⚠ Failed to terminate sessions for ${agent.id}:`, err);
+      }
+    }
+  }
+}
+
 export function checkActiveRuns(workflowId?: string): Array<{ id: string; workflow_id: string; task: string }> {
   return getActiveRuns(workflowId);
 }
@@ -72,10 +100,15 @@ export async function uninstallWorkflow(params: {
   workflowId: string;
   removeGuidance?: boolean;
 }): Promise<WorkflowInstallResult> {
-  const workflowDir = resolveWorkflowDir(params.workflowId);
-  const workflowWorkspaceDir = resolveWorkflowWorkspaceDir(params.workflowId);
+  // Step 1: Read config and terminate agent sessions FIRST to prevent zombie agents
   const { path: configPath, config } = await readOpenClawConfig();
   const list = Array.isArray(config.agents?.list) ? config.agents?.list : [];
+  
+  // Terminate sessions before removing anything else
+  await terminateAgentSessions(params.workflowId, list);
+  
+  const workflowDir = resolveWorkflowDir(params.workflowId);
+  const workflowWorkspaceDir = resolveWorkflowWorkspaceDir(params.workflowId);
   const nextList = filterAgentList(list, params.workflowId);
   const removedAgents = list.filter((entry) => !nextList.includes(entry));
   if (config.agents) {
