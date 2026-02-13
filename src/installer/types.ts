@@ -65,6 +65,11 @@ export type Story = {
   maxRetries: number;
 };
 
+export type CronConfig = {
+  interval_ms?: number;
+  executor?: "openclaw" | "claude-code";
+};
+
 export type WorkflowSpec = {
   id: string;
   name?: string;
@@ -72,6 +77,7 @@ export type WorkflowSpec = {
   agents: WorkflowAgent[];
   steps: WorkflowStep[];
   context?: Record<string, string>;
+  cron?: CronConfig;
   notifications?: {
     url?: string;
   };
