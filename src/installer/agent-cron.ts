@@ -1,4 +1,6 @@
 import { createAgentCronJob, deleteAgentCronJobs, listCronJobs, checkCronToolAvailable } from "./gateway-api.js";
+import { registerAgents, unregisterAgents, hasRegisteredAgents, startScheduler } from "./agent-scheduler.js";
+import { findClaudeBinary } from "./claude-executor.js";
 import type { WorkflowSpec } from "./types.js";
 import { resolveAntfarmCli } from "./paths.js";
 import { getDb } from "../db.js";
@@ -6,7 +8,31 @@ import { getDb } from "../db.js";
 const DEFAULT_EVERY_MS = 300_000; // 5 minutes
 const DEFAULT_AGENT_TIMEOUT_SECONDS = 30 * 60; // 30 minutes
 
-function buildAgentPrompt(workflowId: string, agentId: string): string {
+// ── Executor mode ─────────────────────────────────────────────────
+
+type ExecutorMode = "openclaw" | "claude-code";
+
+/**
+ * Determine which executor to use for a workflow's cron jobs.
+ * Priority: workflow.cron.executor > ANTFARM_EXECUTOR env > default "openclaw"
+ */
+export function getExecutorMode(workflow: WorkflowSpec): ExecutorMode {
+  const fromWorkflow = workflow.cron?.executor;
+  if (fromWorkflow === "claude-code" || fromWorkflow === "openclaw") {
+    return fromWorkflow;
+  }
+
+  const fromEnv = process.env.ANTFARM_EXECUTOR?.trim();
+  if (fromEnv === "claude-code" || fromEnv === "openclaw") {
+    return fromEnv;
+  }
+
+  return "openclaw";
+}
+
+// ── Prompt builder ────────────────────────────────────────────────
+
+export function buildAgentPrompt(workflowId: string, agentId: string): string {
   const fullAgentId = `${workflowId}/${agentId}`;
   const cli = resolveAntfarmCli();
 
@@ -50,13 +76,40 @@ RULES:
 The workflow cannot advance until you report. Your session ending without reporting = broken pipeline.`;
 }
 
+// ── Setup / teardown ──────────────────────────────────────────────
+
 export async function setupAgentCrons(workflow: WorkflowSpec): Promise<void> {
+  const mode = getExecutorMode(workflow);
+
+  if (mode === "claude-code") {
+    await setupAgentCronsClaudeCode(workflow);
+  } else {
+    await setupAgentCronsOpenclaw(workflow);
+  }
+}
+
+async function setupAgentCronsClaudeCode(workflow: WorkflowSpec): Promise<void> {
+  const everyMs = workflow.cron?.interval_ms ?? DEFAULT_EVERY_MS;
+
+  const entries = workflow.agents.map((agent, i) => ({
+    workflowId: workflow.id,
+    agentId: agent.id,
+    prompt: buildAgentPrompt(workflow.id, agent.id),
+    intervalMs: everyMs,
+    anchorMs: i * 60_000,
+  }));
+
+  registerAgents(entries);
+  startScheduler();
+}
+
+async function setupAgentCronsOpenclaw(workflow: WorkflowSpec): Promise<void> {
   const agents = workflow.agents;
-  // Allow per-workflow cron interval via cron.interval_ms in workflow.yml
-  const everyMs = (workflow as any).cron?.interval_ms ?? DEFAULT_EVERY_MS;
+  const everyMs = workflow.cron?.interval_ms ?? DEFAULT_EVERY_MS;
+
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
-    const anchorMs = i * 60_000; // stagger by 1 minute each
+    const anchorMs = i * 60_000;
     const cronName = `antfarm/${workflow.id}/${agent.id}`;
     const agentId = `${workflow.id}/${agent.id}`;
     const prompt = buildAgentPrompt(workflow.id, agent.id);
@@ -79,14 +132,13 @@ export async function setupAgentCrons(workflow: WorkflowSpec): Promise<void> {
 }
 
 export async function removeAgentCrons(workflowId: string): Promise<void> {
+  // Always clean up both sides — harmless if one has nothing to remove
+  unregisterAgents(workflowId);
   await deleteAgentCronJobs(`antfarm/${workflowId}/`);
 }
 
 // ── Run-scoped cron lifecycle ───────────────────────────────────────
 
-/**
- * Count active (running) runs for a given workflow.
- */
 function countActiveRuns(workflowId: string): number {
   const db = getDb();
   const row = db.prepare(
@@ -96,13 +148,41 @@ function countActiveRuns(workflowId: string): number {
 }
 
 /**
- * Check if crons already exist for a workflow.
+ * Check if crons already exist for a workflow (OpenClaw or in-memory scheduler).
  */
-async function workflowCronsExist(workflowId: string): Promise<boolean> {
+async function workflowCronsExist(workflow: WorkflowSpec): Promise<boolean> {
+  const mode = getExecutorMode(workflow);
+
+  if (mode === "claude-code") {
+    return hasRegisteredAgents(workflow.id);
+  }
+
   const result = await listCronJobs();
   if (!result.ok || !result.jobs) return false;
-  const prefix = `antfarm/${workflowId}/`;
+  const prefix = `antfarm/${workflow.id}/`;
   return result.jobs.some((j) => j.name.startsWith(prefix));
+}
+
+/**
+ * Preflight check: verify the execution backend is accessible.
+ * For claude-code mode, checks that the `claude` binary is available.
+ * For openclaw mode, checks that the cron tool (HTTP or CLI) is reachable.
+ */
+export async function checkExecutorAvailable(workflow: WorkflowSpec): Promise<{ ok: boolean; error?: string }> {
+  const mode = getExecutorMode(workflow);
+
+  if (mode === "claude-code") {
+    const binary = await findClaudeBinary();
+    if (!binary) {
+      return {
+        ok: false,
+        error: "Claude Code CLI not found. Install it or set ANTFARM_CLAUDE_PATH. Falling back to openclaw mode is possible by unsetting ANTFARM_EXECUTOR.",
+      };
+    }
+    return { ok: true };
+  }
+
+  return checkCronToolAvailable();
 }
 
 /**
@@ -110,10 +190,9 @@ async function workflowCronsExist(workflowId: string): Promise<boolean> {
  * No-ops if crons already exist (another run of the same workflow is active).
  */
 export async function ensureWorkflowCrons(workflow: WorkflowSpec): Promise<void> {
-  if (await workflowCronsExist(workflow.id)) return;
+  if (await workflowCronsExist(workflow)) return;
 
-  // Preflight: verify cron tool is accessible before attempting to create jobs
-  const preflight = await checkCronToolAvailable();
+  const preflight = await checkExecutorAvailable(workflow);
   if (!preflight.ok) {
     throw new Error(preflight.error!);
   }
