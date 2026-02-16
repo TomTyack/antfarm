@@ -437,7 +437,7 @@ async function main() {
       ).get(run.id) as { id: string } | undefined;
       if (failedStory) {
         db.prepare(
-          "UPDATE stories SET status = 'pending', retry_count = 0, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE stories SET status = 'pending', retry_count = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
         ).run(failedStory.id);
       }
     }
@@ -452,20 +452,20 @@ async function main() {
       if (lc.verifyEach && lc.verifyStep === failedStep.step_id) {
         // Reset the loop step (developer) to pending so it re-claims the story and populates context
         db.prepare(
-          "UPDATE steps SET status = 'pending', current_story_id = NULL, retry_count = 0, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE steps SET status = 'pending', current_story_id = NULL, retry_count = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
         ).run(loopStep.id);
         // Reset verify step to waiting (fires after developer completes)
         db.prepare(
-          "UPDATE steps SET status = 'waiting', current_story_id = NULL, retry_count = 0, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE steps SET status = 'waiting', current_story_id = NULL, retry_count = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
         ).run(failedStep.id);
         // Reset any failed stories to pending
         db.prepare(
-          "UPDATE stories SET status = 'pending', retry_count = 0, updated_at = datetime('now') WHERE run_id = ? AND status = 'failed'"
+          "UPDATE stories SET status = 'pending', retry_count = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE run_id = ? AND status = 'failed'"
         ).run(run.id);
 
         // Reset run to running
         db.prepare(
-          "UPDATE runs SET status = 'running', updated_at = datetime('now') WHERE id = ?"
+          "UPDATE runs SET status = 'running', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
         ).run(run.id);
 
         // Ensure crons are running for this workflow
@@ -487,7 +487,7 @@ async function main() {
 
     // Reset step to pending with fresh retry count
     db.prepare(
-      "UPDATE steps SET status = 'pending', current_story_id = NULL, retry_count = 0, updated_at = datetime('now') WHERE id = ?"
+      "UPDATE steps SET status = 'pending', current_story_id = NULL, retry_count = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
     ).run(failedStep.id);
 
     // If this is a loop step with verify_each, also reset the verify step to waiting
@@ -495,14 +495,14 @@ async function main() {
       const lc = JSON.parse(loopStep.loop_config);
       if (lc.verifyEach && lc.verifyStep) {
         db.prepare(
-          "UPDATE steps SET status = 'waiting', retry_count = 0, updated_at = datetime('now') WHERE run_id = ? AND step_id = ?"
+          "UPDATE steps SET status = 'waiting', retry_count = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE run_id = ? AND step_id = ?"
         ).run(run.id, lc.verifyStep);
       }
     }
 
     // Reset run to running
     db.prepare(
-      "UPDATE runs SET status = 'running', updated_at = datetime('now') WHERE id = ?"
+      "UPDATE runs SET status = 'running', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
     ).run(run.id);
 
     // Ensure crons are running for this workflow

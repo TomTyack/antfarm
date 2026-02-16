@@ -233,13 +233,13 @@ function cancelActiveRuns(workflowId: string): void {
 
     for (const run of runs) {
       db.prepare(
-        "UPDATE steps SET status = 'failed', output = 'Workflow force-uninstalled', updated_at = datetime('now') WHERE run_id = ? AND status IN ('running', 'pending', 'waiting')"
+        "UPDATE steps SET status = 'failed', output = 'Workflow force-uninstalled', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE run_id = ? AND status IN ('running', 'pending', 'waiting')"
       ).run(run.id);
       db.prepare(
-        "UPDATE stories SET status = 'failed', updated_at = datetime('now') WHERE run_id = ? AND status IN ('running', 'pending')"
+        "UPDATE stories SET status = 'failed', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE run_id = ? AND status IN ('running', 'pending')"
       ).run(run.id);
       db.prepare(
-        "UPDATE runs SET status = 'failed', updated_at = datetime('now') WHERE id = ?"
+        "UPDATE runs SET status = 'failed', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
       ).run(run.id);
       console.log(`✓ Cancelled active run: ${run.id}`);
     }
