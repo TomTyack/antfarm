@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+const TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 const LOG_DIR = path.join(os.homedir(), ".openclaw", "antfarm", "agent-logs");
 
