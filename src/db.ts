@@ -92,7 +92,6 @@ function migrate(db: DatabaseSync): void {
   if (!runColNames.has("notify_url")) {
     db.exec("ALTER TABLE runs ADD COLUMN notify_url TEXT");
   }
-<<<<<<< Updated upstream
   if (!runColNames.has("run_number")) {
     db.exec("ALTER TABLE runs ADD COLUMN run_number INTEGER");
     // Backfill existing runs with sequential numbers based on creation order
@@ -102,13 +101,6 @@ function migrate(db: DatabaseSync): void {
       ) WHERE run_number IS NULL
     `);
   }
-}
-
-export function nextRunNumber(): number {
-  const db = getDb();
-  const row = db.prepare("SELECT COALESCE(MAX(run_number), 0) + 1 AS next FROM runs").get() as { next: number };
-  return row.next;
-=======
 
   // Retry delay support
   if (!colNames.has("retry_delay_ms")) {
@@ -117,7 +109,12 @@ export function nextRunNumber(): number {
   if (!colNames.has("retry_after")) {
     db.exec("ALTER TABLE steps ADD COLUMN retry_after TEXT");
   }
->>>>>>> Stashed changes
+}
+
+export function nextRunNumber(): number {
+  const db = getDb();
+  const row = db.prepare("SELECT COALESCE(MAX(run_number), 0) + 1 AS next FROM runs").get() as { next: number };
+  return row.next;
 }
 
 export function getDbPath(): string {

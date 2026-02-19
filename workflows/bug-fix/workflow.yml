@@ -201,24 +201,11 @@ steps:
 
       Instructions:
       1. cd into the repo
-<<<<<<< Updated upstream
       2. Create the bugfix branch (git checkout -b {{branch}} from main)
       3. Read package.json, CI config, test config to understand build/test setup
       4. Ensure .gitignore exists — if missing, create one appropriate for the detected stack (must include .env, node_modules/, *.key, *.pem at minimum)
       5. Run the build to establish a baseline
       6. Run the tests to establish a baseline
-=======
-      2. git fetch origin && git checkout develop && git pull
-      3. Create the bugfix branch: git checkout -b {{branch}}
-      4. This is a pnpm monorepo (use `corepack pnpm`):
-         - Frontend: apps/web (Next.js)
-         - Backend: apps/api (Python FastAPI with Poetry)
-      5. Build: corepack pnpm --recursive run build
-      6. Frontend tests: corepack pnpm --filter web run test
-      7. Backend tests: cd apps/api && poetry run pytest
-      8. Start services: ./stop-all.sh && sleep 5 && ./start-all.sh
-      9. Monitor logs: ./monitor-logs.sh
->>>>>>> Stashed changes
 
       Reply with:
       STATUS: done

@@ -146,6 +146,7 @@ const ROLE_POLICIES: Record<AgentRole, { profile?: string; alsoAllow?: string[];
 
   // refactoring: read + write + exec — quality gate refactors code to match patterns
   refactoring: {
+    timeoutSeconds: TIMEOUT_30_MIN,  // quality gate refactoring + build
     profile: "coding",
     deny: [
       ...ALWAYS_DENY,

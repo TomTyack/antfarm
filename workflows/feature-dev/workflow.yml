@@ -52,14 +52,6 @@ agents:
         AGENTS.md: agents/developer/AGENTS.md
         SOUL.md: agents/developer/SOUL.md
         IDENTITY.md: agents/developer/IDENTITY.md
-<<<<<<< Updated upstream
-=======
-        cc-super-dev-prompt.md: quality-gates/cc-super-dev-prompt.md
-        cc-nextjs-serverside.md: quality-gates/cc-nextjs-serverside.md
-        cc-frontend-dev.md: ../../skills/content-craft/cc-frontend-dev.md
-        cc-auth-server.md: ../../skills/content-craft/cc-auth-server.md
-        react-best-practices.md: ../../skills/content-craft/react-best-practices.md
->>>>>>> Stashed changes
 
   - id: verifier
     name: Verifier
@@ -77,24 +69,6 @@ agents:
         cc-nextjs-serverside.md: quality-gates/cc-nextjs-serverside.md
         react-best-practices.md: ../../skills/content-craft/react-best-practices.md
 
-<<<<<<< Updated upstream
-=======
-  - id: quality-gate
-    name: Quality Gate
-    role: refactoring
-    description: Runs code and refactors according to architectural patterns before testing.
-    workspace:
-      baseDir: agents/quality-gate
-      files:
-        AGENTS.md: agents/quality-gate/AGENTS.md
-        SOUL.md: agents/quality-gate/SOUL.md
-        IDENTITY.md: agents/quality-gate/IDENTITY.md
-        cc-nextjs-serverside.md: quality-gates/cc-nextjs-serverside.md
-        cc-super-dev-prompt.md: quality-gates/cc-super-dev-prompt.md
-        react-best-practices.md: ../../skills/content-craft/react-best-practices.md
-        cc-auth-server.md: ../../skills/content-craft/cc-auth-server.md
-
->>>>>>> Stashed changes
   - id: tester
     name: Tester
     role: testing
@@ -175,25 +149,12 @@ steps:
 
       Instructions:
       1. cd into the repo
-<<<<<<< Updated upstream
       2. Create the feature branch (git checkout -b {{branch}})
       3. Read package.json, CI config, test config to understand the build/test setup
       4. Ensure .gitignore exists — if missing, create one appropriate for the detected stack (must include .env, node_modules/, *.key, *.pem at minimum)
       5. Run the build to establish a baseline
       6. Run the tests to establish a baseline
       7. Report what you found
-=======
-      2. git fetch origin && git checkout develop && git pull
-      3. Create the feature branch: git checkout -b {{branch}}
-      4. This is a pnpm monorepo (use `corepack pnpm`):
-         - Frontend: apps/web (Next.js)
-         - Backend: apps/api (Python FastAPI with Poetry)
-      5. Build: corepack pnpm --recursive run build
-      6. Frontend tests: corepack pnpm --filter web run test
-      7. Backend tests: cd apps/api && poetry run pytest
-      8. Start services: ./stop-all.sh && sleep 5 && ./start-all.sh
-      9. Monitor logs: ./monitor-logs.sh
->>>>>>> Stashed changes
 
       Reply with:
       STATUS: done
@@ -249,7 +210,6 @@ steps:
       - react-best-practices.md: React performance optimization (40+ rules)
 
       Instructions:
-<<<<<<< Updated upstream
       1. Read progress-{{run_id}}.txt — especially the Codebase Patterns section
       2. Pull latest on the branch
       3. Implement this story only
@@ -259,23 +219,6 @@ steps:
       7. Commit: feat: {{current_story_id}} - {{current_story_title}}
       8. Append to progress-{{run_id}}.txt
       9. Update Codebase Patterns if you found reusable patterns
-=======
-      1. Read cc-super-dev-prompt.md — enter the Implementation Chamber
-      2. Read progress.txt — especially the Codebase Patterns section
-      3. If UI work, read cc-frontend-dev.md for design system patterns
-      4. If auth, read cc-auth-server.md for correct auth patterns
-      5. Read cc-nextjs-serverside.md for Server Component architecture
-      6. Build mental model BEFORE coding — let the solution emerge
-      7. Generate 3-5 verification questions and answer them adversarially
-      8. Pull latest on the branch
-      9. Implement this story only (following your verified approach)
-      10. Write tests for this story's functionality
-      11. Run typecheck / build
-      12. Run tests to confirm they pass
-      13. Commit: feat: {{current_story_id}} - {{current_story_title}}
-      14. Append to progress.txt
-      15. Update Codebase Patterns if you found reusable patterns
->>>>>>> Stashed changes
 
       Reply with:
       STATUS: done
@@ -314,7 +257,6 @@ steps:
       5. No obvious incomplete work
       6. Typecheck passes
 
-<<<<<<< Updated upstream
       ## Visual Verification (Frontend Changes)
       Has frontend changes: {{has_frontend_changes}}
 
@@ -333,25 +275,6 @@ steps:
       7. Include your visual findings in VERIFIED output
 
       If {{has_frontend_changes}} is 'false', skip visual verification entirely.
-=======
-      Code Quality Standards (read cc-super-dev-prompt.md for full details):
-      - Functions/methods: max 45 lines (strict)
-      - Code files: max 500 lines (strict)
-      - Component files: max 300 lines
-      - Component functions: max 80 lines
-      - Max nesting depth: 3 levels
-      - No code duplication (DRY enforced)
-      - Single responsibility per function
-      Use wc -l and grep to measure programmatically.
-
-      Next.js Architecture (read cc-nextjs-serverside.md for full details):
-      - Pages and layouts MUST be Server Components (no 'use client')
-      - 'use client' only on leaf components needing interactivity
-      - Data fetching in Server Components, NOT useEffect
-      - Use serverFetch() and getServerUser() — no custom fetch patterns
-      - Props passed to Client Components must be serializable
-      - server-only package protects sensitive server code
->>>>>>> Stashed changes
 
       Reply with:
       STATUS: done
@@ -369,67 +292,6 @@ steps:
       on_exhausted:
         escalate_to: human
 
-<<<<<<< Updated upstream
-=======
-  - id: quality-gate
-    agent: quality-gate
-    input: |
-      Quality gate: Run the code and refactor according to architectural patterns.
-
-      TASK:
-      {{task}}
-
-      REPO: {{repo}}
-      BRANCH: {{branch}}
-      CHANGES: {{changes}}
-      BUILD_CMD: {{build_cmd}}
-
-      PROGRESS LOG:
-      {{progress}}
-
-      Available skills (read these for quality review):
-      - cc-nextjs-serverside.md: Next.js Server Component architecture
-      - cc-super-dev-prompt.md: Code quality standards (size limits, complexity)
-      - react-best-practices.md: React performance (40+ rules)
-      - cc-auth-server.md: Auth patterns (getServerUser, Supabase)
-
-      Your job:
-      1. Read cc-nextjs-serverside.md for Next.js architectural patterns
-      2. Read cc-super-dev-prompt.md for code quality size limits
-      3. Read react-best-practices.md for performance anti-patterns
-      4. Run the code to verify it actually works
-      5. Review the implementation against architectural patterns:
-         - Server Components vs Client Components placement
-         - Data fetching patterns (server-side vs client-side)
-         - Component boundaries and serialization
-         - Use of established utilities (serverFetch, getServerUser)
-      4. Refactor any violations:
-         - Move 'use client' to leaf components
-         - Move data fetching to server components
-         - Fix serialization issues
-         - Ensure typecheck still passes after refactoring
-      5. Run build to confirm no regressions
-      6. Commit refactorings: refactor: architectural improvements
-
-      Reply with:
-      STATUS: done
-      REFACTORINGS: What patterns you fixed (or "none needed")
-      
-      Or if blocking issues found:
-      STATUS: retry
-      ISSUES:
-      - Architectural violations that need developer attention
-    expects: "STATUS: done"
-    max_retries: 3
-    retry_delay_ms: 600000
-    on_fail:
-      retry_step: implement
-      max_retries: 3
-      retry_delay_ms: 600000
-      on_exhausted:
-        escalate_to: human
-
->>>>>>> Stashed changes
   - id: test
     agent: tester
     input: |
