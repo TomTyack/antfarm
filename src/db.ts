@@ -82,6 +82,9 @@ function migrate(db: DatabaseSync): void {
   if (!colNames.has("current_story_id")) {
     db.exec("ALTER TABLE steps ADD COLUMN current_story_id TEXT");
   }
+  if (!colNames.has("abandoned_count")) {
+    db.exec("ALTER TABLE steps ADD COLUMN abandoned_count INTEGER DEFAULT 0");
+  }
 
   // Add columns to runs table for backwards compat
   const runCols = db.prepare("PRAGMA table_info(runs)").all() as Array<{ name: string }>;
@@ -89,6 +92,32 @@ function migrate(db: DatabaseSync): void {
   if (!runColNames.has("notify_url")) {
     db.exec("ALTER TABLE runs ADD COLUMN notify_url TEXT");
   }
+<<<<<<< Updated upstream
+  if (!runColNames.has("run_number")) {
+    db.exec("ALTER TABLE runs ADD COLUMN run_number INTEGER");
+    // Backfill existing runs with sequential numbers based on creation order
+    db.exec(`
+      UPDATE runs SET run_number = (
+        SELECT COUNT(*) FROM runs r2 WHERE r2.created_at <= runs.created_at
+      ) WHERE run_number IS NULL
+    `);
+  }
+}
+
+export function nextRunNumber(): number {
+  const db = getDb();
+  const row = db.prepare("SELECT COALESCE(MAX(run_number), 0) + 1 AS next FROM runs").get() as { next: number };
+  return row.next;
+=======
+
+  // Retry delay support
+  if (!colNames.has("retry_delay_ms")) {
+    db.exec("ALTER TABLE steps ADD COLUMN retry_delay_ms INTEGER DEFAULT 0");
+  }
+  if (!colNames.has("retry_after")) {
+    db.exec("ALTER TABLE steps ADD COLUMN retry_after TEXT");
+  }
+>>>>>>> Stashed changes
 }
 
 export function getDbPath(): string {
