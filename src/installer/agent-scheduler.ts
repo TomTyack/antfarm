@@ -1,5 +1,8 @@
 import { executeClaudePrompt } from "./claude-executor.js";
 import { getDb } from "../db.js";
+import { loadWorkflowSpec } from "./workflow-spec.js";
+import { resolveWorkflowDir } from "./paths.js";
+import { buildAgentPrompt } from "./agent-cron.js";
 
 const TICK_INTERVAL_MS = 15_000; // check every 15 seconds
 
@@ -95,8 +98,50 @@ export function isSchedulerRunning(): boolean {
 
 // ── Internal ────────────────────────────────────────────────────────
 
-function tick(): void {
+/**
+ * Discover active workflow runs that don't have registered agents yet
+ * and auto-register them. This allows workflows submitted after the
+ * daemon started to be picked up without a daemon restart.
+ */
+async function discoverNewRuns(): Promise<void> {
+  try {
+    const db = getDb();
+    const activeRuns = db.prepare(
+      "SELECT DISTINCT workflow_id FROM runs WHERE status = 'running'"
+    ).all() as Array<{ workflow_id: string }>;
+
+    for (const run of activeRuns) {
+      if (hasRegisteredAgents(run.workflow_id)) continue;
+
+      try {
+        const workflowDir = resolveWorkflowDir(run.workflow_id);
+        const workflow = await loadWorkflowSpec(workflowDir);
+        const everyMs = workflow.cron?.interval_ms ?? 300_000;
+
+        const entries = workflow.agents.map((agent: { id: string }, i: number) => ({
+          workflowId: workflow.id,
+          agentId: agent.id,
+          prompt: buildAgentPrompt(workflow.id, agent.id),
+          intervalMs: everyMs,
+          anchorMs: i * 60_000,
+        }));
+
+        registerAgents(entries);
+        console.log(`[scheduler] Auto-registered ${entries.length} agents for new workflow run: ${run.workflow_id}`);
+      } catch (err) {
+        console.error(`[scheduler] Failed to auto-register agents for ${run.workflow_id}:`, err);
+      }
+    }
+  } catch {
+    // DB unavailable — skip discovery this tick
+  }
+}
+
+async function tick(): Promise<void> {
   const now = Date.now();
+
+  // Discover and register agents for any new workflow runs
+  await discoverNewRuns();
 
   for (const [key, agent] of agents) {
     if (agent.running) continue;
