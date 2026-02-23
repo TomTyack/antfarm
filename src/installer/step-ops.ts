@@ -879,6 +879,18 @@ export function archiveRunProgress(runId: string): void {
  * Fail a step, with retry logic. For loop steps, applies per-story retry.
  */
 export function failStep(stepId: string, error: string): { retrying: boolean; runFailed: boolean } {
+  // Guard: if the 'error' message actually contains successful output (STATUS: done/complete),
+  // the agent likely called fail by mistake or the output was misrouted. Treat as completion.
+  const errorLower = error.toLowerCase();
+  if (errorLower.includes('status: done') || errorLower.includes('status: complete')) {
+    try {
+      const result = completeStep(stepId, error);
+      return { retrying: false, runFailed: false };
+    } catch {
+      // Fall through to normal fail handling if completeStep errors
+    }
+  }
+
   const db = getDb();
 
   const step = db.prepare(
