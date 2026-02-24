@@ -70,6 +70,7 @@ const DEFAULT_SESSION_MAINTENANCE = {
  */
 const TIMEOUT_20_MIN = 1200;
 const TIMEOUT_30_MIN = 1800;
+const TIMEOUT_60_MIN = 3600;
 
 const ROLE_POLICIES: Record<AgentRole, { profile?: string; alsoAllow?: string[]; deny: string[]; timeoutSeconds: number }> = {
   // analysis: read code, run git/grep, reason — no writing, no web, no browser
@@ -92,7 +93,7 @@ const ROLE_POLICIES: Record<AgentRole, { profile?: string; alsoAllow?: string[];
       "image", "tts",                  // unnecessary
       "group:ui",                      // no browser/canvas
     ],
-    timeoutSeconds: TIMEOUT_30_MIN,  // implements code + build + tests
+    timeoutSeconds: TIMEOUT_60_MIN,  // implements code + build + tests (60 min for large changes)
   },
 
   // verification: read + exec but NO write — preserves independent verification integrity
