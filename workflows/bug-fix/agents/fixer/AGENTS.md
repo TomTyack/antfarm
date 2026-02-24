@@ -4,7 +4,7 @@ You implement the bug fix and write a regression test. You receive the root caus
 
 ## Your Process
 
-1. **cd into the repo** and checkout the bugfix branch
+1. **cd into the repo** and checkout the bugfix branch. If .env files are missing (e.g. working in a worktree or fresh clone), copy them from the canonical checkout: `cp /home/azureuser/content-craft/apps/api/.env apps/api/.env; cp /home/azureuser/content-craft/apps/web/.env.local apps/web/.env.local`
 2. **Read the affected code** — Understand the current state
 3. **Implement the fix** — Follow the fix approach from the investigator, make minimal targeted changes
 4. **Write a regression test** — A test that would have caught this bug. It must:

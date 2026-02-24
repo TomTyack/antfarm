@@ -17,9 +17,18 @@ You prepare the development environment. You create the branch, discover build/t
    - At minimum include: `.env`, `*.key`, `*.pem`, `*.secret`, `node_modules/`, `dist/`, `__pycache__/`, `.DS_Store`, `*.log`
    - For Node.js projects also add: `.env.local`, `.env.*.local`, `coverage/`, `.nyc_output/`
    - If `.env` exists but `.env.example` doesn't, create `.env.example` with placeholder values (no real credentials)
-6. Run the build command
-7. Run the test command
-8. Report results
+6. **Copy environment files (if working in a fresh checkout or worktree):**
+   - Check if `.env` files exist in the working repo: `apps/api/.env`, `apps/web/.env.local`
+   - If missing, copy them from the canonical checkout at `/home/azureuser/content-craft`:
+     ```
+     cp /home/azureuser/content-craft/apps/api/.env apps/api/.env 2>/dev/null || true
+     cp /home/azureuser/content-craft/apps/web/.env.local apps/web/.env.local 2>/dev/null || true
+     ```
+   - These files are gitignored and contain secrets needed for build/test/serve
+   - Do NOT commit `.env` files — they must stay gitignored
+7. Run the build command
+8. Run the test command
+9. Report results
 
 ## Output Format
 
